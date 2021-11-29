@@ -32,8 +32,24 @@ class SearchController(private val producerTemplate: ProducerTemplate) {
 
     @RequestMapping(value = ["/search"])
     @ResponseBody
-    fun search(@RequestParam("q") q: String?): Any =
-        producerTemplate.requestBodyAndHeader(DIRECT_ROUTE, "mandalorian", "keywords", q)
+    fun search(@RequestParam("q") q: String?): Any {
+        var request = q
+        q?.let {
+            val tokens = it.split(" ")
+            var count = ""
+            var keywords = ""
+            for (token in tokens){
+                if (token.length > 4 && token.substring(0, 4) == "max:"){
+                    count = "?count=" + token.substring(4)
+                } else {
+                    keywords += token + " "
+                }
+            }
+            // Count must be appended at the end or error will be thrown
+            request = keywords + count
+        }
+        return producerTemplate.requestBodyAndHeader(DIRECT_ROUTE, "mandalorian", "keywords", request)
+    }
 }
 
 @Component
