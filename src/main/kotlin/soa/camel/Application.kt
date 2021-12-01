@@ -33,32 +33,35 @@ class SearchController(private val producerTemplate: ProducerTemplate) {
     @RequestMapping(value = ["/search"])
     @ResponseBody
     fun search(@RequestParam("q") q: String?): Any {
-        var request = q
-        q?.let {
-            val tokens = it.split(" ")
-            var count = ""
-            var keywords = ""
-            for (token in tokens){
-                if (token.length > 4 && token.substring(0, 4) == "max:"){
-                    count = "?count=" + token.substring(4)
-                } else {
-                    keywords += token + " "
-                }
-            }
-            // Count must be appended at the end or error will be thrown
-            request = keywords + count
-        }
-        return producerTemplate.requestBodyAndHeader(DIRECT_ROUTE, "mandalorian", "keywords", request)
+        return producerTemplate.requestBodyAndHeader(DIRECT_ROUTE, "mandalorian", "keywords", q)
     }
 }
 
 @Component
 class Router(meterRegistry: MeterRegistry) : RouteBuilder() {
 
+    private fun keywords(request: String): String {
+        val tokens = request.split(" ")
+        var count = ""
+        var keywords = ""
+        for (token in tokens){
+            if (token.length > 4 && token.substring(0, 4) == "max:"){
+                count = "?count=" + token.substring(4)
+            } else {
+                keywords += token + " "
+            }
+        }
+        // Count must be appended at the end or error will be thrown
+        return keywords + count
+    }
+
     private val perKeywordMessages = TaggedCounter("per-keyword-messages", "keyword", meterRegistry)
 
     override fun configure() {
         from(DIRECT_ROUTE)
+            .process { exchange ->
+                exchange.getIn().setHeader("keywords", keywords(exchange.getIn().getHeader("keywords") as String))
+            }
             .toD("twitter-search:\${header.keywords}")
             .wireTap(LOG_ROUTE)
             .wireTap(COUNT_ROUTE)
